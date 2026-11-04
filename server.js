@@ -383,7 +383,7 @@ app.get('/e/:f',(q,s)=>{const e=one('SELECT * FROM evidence WHERE file=? AND pub
 app.get('/r/:t/report',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send(themeOf(c,q.query)=='c'?report2C(c):report2(c)):s.sendStatus(404)});
 app.get('/r/:t',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send((t=>t=='b'?reportB:t=='c'?reportC:report)(themeOf(c,q.query))(c,q.query.m)):s.status(404).send(page('なし','<section class="card"><h2>ページが見つかりません</h2></section>'))});
 app.get('/',(q,s)=>s.redirect('/admin'));
-initSql().then(SQL=>{db=fs.existsSync(DBF)?new SQL.Database(fs.readFileSync(DBF)):new SQL.Database();
+global.__app=app;global.__ready=initSql().then(SQL=>{db=fs.existsSync(DBF)?new SQL.Database(fs.readFileSync(DBF)):new SQL.Database();
 db.run(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY,v TEXT);CREATE TABLE IF NOT EXISTS master(date TEXT PRIMARY KEY,equity REAL,flow REAL DEFAULT 0,source TEXT);
 CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY,token TEXT UNIQUE,name TEXT,capital REAL,start_date TEXT,note TEXT);CREATE TABLE IF NOT EXISTS deposits(id INTEGER PRIMARY KEY,client_id INT,date TEXT,amount REAL);
 CREATE TABLE IF NOT EXISTS trades(id INTEGER PRIMARY KEY,oid TEXT UNIQUE,ts INT,symbol TEXT,side TEXT,qty REAL,entry REAL,exit REAL,pnl REAL);CREATE TABLE IF NOT EXISTS evidence(id INTEGER PRIMARY KEY,file TEXT,created TEXT,ocr_value REAL,confirmed INT,kind TEXT DEFAULT '資産',public INT DEFAULT 1);`);
