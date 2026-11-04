@@ -291,7 +291,7 @@ const themeOf=(c,q)=>{const t=String(q.type||'').toLowerCase();if('abc'.includes
 // ===== 管理 =====
 const tok=()=>crypto.createHmac('sha256',ADMIN).update('demo-admin').digest('hex');const authed=q=>(q.headers.cookie||'').includes('dadm='+tok());
 app.get('/admin/login',(q,s)=>s.send(page('ログイン',`<section class="card narrow" style="margin:60px auto"><h2>管理画面ログイン ${DEMO}</h2><form method="post" class="form"><label>パスワード<input type="password" name="pw" autofocus></label><button>ログイン</button></form></section>`)));
-app.post('/admin/login',(q,s)=>{if(q.body.pw===ADMIN){s.setHeader('Set-Cookie',`dadm=${tok()}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000`);return s.redirect('/admin')}s.redirect('/admin/login')});
+const LF={};app.post('/admin/login',(q,s)=>{const ip=(q.headers['x-forwarded-for']||q.ip||'').split(',')[0].trim();const f=LF[ip]||(LF[ip]={n:0,t:0});if(f.t>Date.now())return s.status(429).send(page('ロック中','<section class="card narrow" style="margin:60px auto"><h2>しばらく待ってください</h2><p>パスワードを何度もまちがえたため、15分間ログインできません。</p></section>'));if(q.body.pw===ADMIN){f.n=0;s.setHeader('Set-Cookie',`dadm=${tok()}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000`);return s.redirect('/admin')}if(++f.n>=5){f.n=0;f.t=Date.now()+15*6e4}s.redirect('/admin/login')});
 app.use('/admin',(q,s,n)=>authed(q)?n():s.redirect('/admin/login'));
 const nav=a=>`<header class="top"><h1>管理画面 ${DEMO}</h1><nav class="anav">${[['/admin','クライアント一覧'],['/admin/master','マスター口座'],['/admin/import','CSV一括登録'],['/admin/new','＋ 追加']].map(x=>`<a class="btn sm ${x[0]==a?'':'ghost'}" href="${x[0]}">${x[1]}</a>`).join('')}</nav></header>`;
 const flash=q=>q.query.m?`<div class="flash">${esc(q.query.m)}</div>`:'';
