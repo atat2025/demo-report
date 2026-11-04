@@ -6,3 +6,4 @@ data
 screenshots
 mockups
 eng.traineddata
+.env*

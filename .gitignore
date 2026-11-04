@@ -6,3 +6,5 @@ data/
 screenshots/
 mockups/
 eng.traineddata
+.vercel
+.env*

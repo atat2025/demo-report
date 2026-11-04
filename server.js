@@ -1,7 +1,7 @@
 const express=require('express'),fs=require('fs'),path=require('path'),crypto=require('crypto'),multer=require('multer'),cron=require('node-cron'),initSql=require('sql.js');
 if(fs.existsSync('.env'))for(const l of fs.readFileSync('.env','utf8').split('\n')){const m=l.match(/^(\w+)=(.*)$/);if(m&&!process.env[m[1]])process.env[m[1]]=m[2]}
 const PORT=process.env.PORT||3410,ADMIN=process.env.ADMIN_PASSWORD,API='https://api-demo.bybit.com';
-const DATA_DIR=process.env.DATA_DIR||'data';fs.mkdirSync(DATA_DIR+'/uploads',{recursive:true});const DBF=DATA_DIR+'/app.db';if(!fs.existsSync(DBF)&&fs.existsSync('seed/app.db')){fs.copyFileSync('seed/app.db',DBF);for(const f of fs.readdirSync('seed/uploads'))fs.copyFileSync('seed/uploads/'+f,DATA_DIR+'/uploads/'+f)};let db;const save=()=>fs.writeFileSync(DBF,Buffer.from(db.export()));
+if(process.env.VERCEL)process.env.TZ='Asia/Tokyo';const DATA_DIR=process.env.DATA_DIR||(process.env.VERCEL?'/tmp/data':'data');fs.mkdirSync(DATA_DIR+'/uploads',{recursive:true});const DBF=DATA_DIR+'/app.db';if(!fs.existsSync(DBF)&&fs.existsSync(path.join(__dirname,'seed/app.db'))){fs.copyFileSync(path.join(__dirname,'seed/app.db'),DBF);for(const f of fs.readdirSync(path.join(__dirname,'seed/uploads')))fs.copyFileSync(path.join(__dirname,'seed/uploads',f),DATA_DIR+'/uploads/'+f)};let db;const save=()=>fs.writeFileSync(DBF,Buffer.from(db.export()));
 const all=(q,p=[])=>{const s=db.prepare(q);s.bind(p);const r=[];while(s.step())r.push(s.getAsObject());s.free();return r};
 const one=(q,p)=>all(q,p)[0];const run=(q,p=[])=>{db.run(q,p);save()};
 const getS=k=>(one('SELECT v FROM settings WHERE k=?',[k])||{}).v||'';const setS=(k,v)=>run('INSERT OR REPLACE INTO settings(k,v) VALUES(?,?)',[k,v]);
@@ -383,7 +383,7 @@ app.get('/e/:f',(q,s)=>{const e=one('SELECT * FROM evidence WHERE file=? AND pub
 app.get('/r/:t/report',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send(themeOf(c,q.query)=='c'?report2C(c):report2(c)):s.sendStatus(404)});
 app.get('/r/:t',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send((t=>t=='b'?reportB:t=='c'?reportC:report)(themeOf(c,q.query))(c,q.query.m)):s.status(404).send(page('なし','<section class="card"><h2>ページが見つかりません</h2></section>'))});
 app.get('/',(q,s)=>s.redirect('/admin'));
-global.__app=app;global.__ready=initSql().then(SQL=>{db=fs.existsSync(DBF)?new SQL.Database(fs.readFileSync(DBF)):new SQL.Database();
+global.__app=app;global.__ready=initSql({locateFile:f=>require('path').join(path.dirname(require.resolve('sql.js')),f)}).then(SQL=>{db=fs.existsSync(DBF)?new SQL.Database(fs.readFileSync(DBF)):new SQL.Database();
 db.run(`CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY,v TEXT);CREATE TABLE IF NOT EXISTS master(date TEXT PRIMARY KEY,equity REAL,flow REAL DEFAULT 0,source TEXT);
 CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY,token TEXT UNIQUE,name TEXT,capital REAL,start_date TEXT,note TEXT);CREATE TABLE IF NOT EXISTS deposits(id INTEGER PRIMARY KEY,client_id INT,date TEXT,amount REAL);
 CREATE TABLE IF NOT EXISTS trades(id INTEGER PRIMARY KEY,oid TEXT UNIQUE,ts INT,symbol TEXT,side TEXT,qty REAL,entry REAL,exit REAL,pnl REAL);CREATE TABLE IF NOT EXISTS evidence(id INTEGER PRIMARY KEY,file TEXT,created TEXT,ocr_value REAL,confirmed INT,kind TEXT DEFAULT '資産',public INT DEFAULT 1);`);
