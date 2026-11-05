@@ -37,8 +37,9 @@ function parseCsv(text){
     else{const m=line.match(/^([^,]+),(.*)$/);if(!m)continue;name=m[1];rest=m[2]}
     const cols=rest.split(',');
     // 軍資金(円),開始日,投入資金(円),現在残高(円),...
-    const bal=Number(cols[3]);
-    out.push({name,yen:bal,start:cols[1],inv:Number(cols[2])});
+    const balRaw=(cols[3]||'').trim();
+    const bal=balRaw===''?null:Number(balRaw);
+    out.push({name,yen:bal,start:cols[1],inv:Number(cols[2]),blank:balRaw===''});
   }
   return out;
 }
@@ -53,7 +54,7 @@ async function fetchLive(cookie){
   const cookie=await login();
   const live=await fetchLive(cookie);
   if(doSave){
-    const payload={savedAt:new Date().toISOString(),base:BASE,rows:live.map(r=>({name:r.name,yen:r.yen}))};
+    const payload={savedAt:new Date().toISOString(),base:BASE,rows:live.map(r=>({name:r.name,yen:r.blank?null:r.yen,blank:!!r.blank}))};
     fs.writeFileSync(snapPath,JSON.stringify(payload,null,2));
     console.log('saved',snapPath,'clients',live.length);
     process.exit(0);
@@ -63,11 +64,18 @@ async function fetchLive(cookie){
     process.exit(2);
   }
   const snap=JSON.parse(fs.readFileSync(snapPath,'utf8'));
-  const map=Object.fromEntries((snap.rows||[]).map(r=>[r.name,r.yen]));
+  const map=Object.fromEntries((snap.rows||[]).map(r=>[r.name,{yen:r.yen,blank:r.blank||r.yen==null||r.yen===''}]));
   const diffs=[];
   for(const r of live){
     if(!(r.name in map)){diffs.push({name:r.name,expected:'(missing in snapshot)',actual:r.yen});continue}
-    if(Number(map[r.name])!==Number(r.yen))diffs.push({name:r.name,expected:map[r.name],actual:r.yen,delta:r.yen-map[r.name]});
+    const exp=map[r.name];
+    const expBlank=!!exp.blank;
+    const actBlank=!!r.blank;
+    if(expBlank||actBlank){
+      if(expBlank!==actBlank)diffs.push({name:r.name,expected:expBlank?'(blank)':exp.yen,actual:actBlank?'(blank)':r.yen});
+      continue;
+    }
+    if(Number(exp.yen)!==Number(r.yen))diffs.push({name:r.name,expected:exp.yen,actual:r.yen,delta:r.yen-exp.yen});
   }
   for(const n of Object.keys(map)){
     if(!live.find(r=>r.name===n))diffs.push({name:n,expected:map[n],actual:'(missing live)'});
