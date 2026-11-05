@@ -68,32 +68,34 @@ function clientCalc(c,ms){ms=ms||masterSeries();const dep={};for(const d of all(
  const L=rows[rows.length-1];const Bb=L.amount;
  return {ser:mser,bal:Bb,inv:invi,autoInv,pnl:Bb-invi,rate:invi?(Bb-invi)/invi:0,twr:invi?(Bb/invi)-1:0,mdd:0,day:dd(c.start_date,L.date)+1,asof:L.date,manual:true,balDate:L.date,fullBal:L.amount};}
 function evFor(c){return c&&c.id?one("SELECT * FROM evidence WHERE kind='資産' AND public=1 AND client_id=? ORDER BY id DESC LIMIT 1",[c.id]):null}
-function apiCard(){const ms=masterSeries(),L=ms[ms.length-1];const lt=getS('last_ts');const t=lt?new Date(Number(lt)+9*36e5).toISOString().slice(0,16).replace('T',' '):(L?L.date:'—');
- let wb=null;try{wb=JSON.parse(getS('wallet_snap')||'')}catch{}
- const eq=L?L.equity:null;
+function apiCard(){const ms=masterSeries(),L=ms[ms.length-1];
+ let live=null;try{live=JSON.parse(getS('live_wallet')||'')}catch{}
+ if(!live||!isFinite(live.equity)){try{live=JSON.parse(getS('wallet_snap')||'')}catch{}live=live?{...live,at:live.at||0}:null}
+ const eq=live&&isFinite(live.equity)?live.equity:(L?L.equity:null);
+ const wallet=live&&isFinite(live.wallet)?live.wallet:eq;
+ const upl=live&&isFinite(live.upl)?live.upl:null;
+ const avail=live&&isFinite(live.avail)?live.avail:eq;
+ const marg=live&&isFinite(live.margin)?live.margin:eq;
+ const atMs=live&&live.at?Number(live.at):Number(getS('last_ts')||0);
+ const t=atMs?new Date(atMs+9*36e5).toISOString().slice(0,16).replace('T',' '):(L?L.date:'—');
  const n=v=>v==null||!isFinite(v)?'—':(Math.round(Math.abs(v)*fx()*100)/100).toLocaleString('ja-JP',{minimumFractionDigits:2,maximumFractionDigits:2});
  const jpy=v=>{if(v==null||!isFinite(v))return '—';return (v<0?'-':'')+n(v)+' JPY'};
- const tot=wb&&isFinite(wb.equity)?wb.equity:eq;
- const wallet=wb&&isFinite(wb.wallet)?wb.wallet:eq;
- const upl=wb&&isFinite(wb.upl)?wb.upl:0;
- const avail=wb&&isFinite(wb.avail)?wb.avail:eq;
- const marg=wb&&isFinite(wb.margin)?wb.margin:eq;
  const uplCls=(upl||0)>=0?'#f7a600':'#ff6b6b';
  return `<div class="bk bybit-api" style="margin:10px 0 8px;padding:0;border-radius:14px;background:#0b0e11!important;border:1px solid #2a2d33;color:#fff;overflow:hidden">
 <div style="padding:14px 16px 16px">
 <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#eaecef"><span>合計資産</span><span style="color:${(L?L.r:0)>=0?'#20b26c':'#ef454a'};font-size:12px">${pct(L?L.r:0)}</span></div>
-<div style="font-size:26px;font-weight:700;margin:8px 0 2px;letter-spacing:.2px">${tot==null?'—':n(tot)} <span style="font-size:13px;font-weight:500;color:#8b8f99">JPY</span></div>
+<div style="font-size:26px;font-weight:700;margin:8px 0 2px;letter-spacing:.2px"><span id="live-equity-num">${eq==null?'—':n(eq)}</span> <span style="font-size:13px;font-weight:500;color:#8b8f99">JPY</span></div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;margin-top:16px;font-size:12px">
-<div><div style="color:#8b8f99;margin-bottom:4px">ウォレット残高</div><div style="font-size:14px">${jpy(wallet)}</div></div>
-<div><div style="color:#8b8f99;margin-bottom:4px">未実現損益</div><div style="font-size:14px;color:${uplCls}">${upl==null?'—':((upl>0?'+':'')+jpy(upl))}</div></div>
-<div><div style="color:#8b8f99;margin-bottom:4px">利用可能残高</div><div style="font-size:14px">${jpy(avail)}</div></div>
-<div><div style="color:#8b8f99;margin-bottom:4px">証拠金残高</div><div style="font-size:14px">${jpy(marg)}</div></div>
+<div><div style="color:#8b8f99;margin-bottom:4px">ウォレット残高</div><div style="font-size:14px" id="live-wallet-num">${jpy(wallet)}</div></div>
+<div><div style="color:#8b8f99;margin-bottom:4px">未実現損益</div><div style="font-size:14px;color:${uplCls}" id="live-upl-num">${upl==null?'—':((upl>0?'+':'')+jpy(upl))}</div></div>
+<div><div style="color:#8b8f99;margin-bottom:4px">利用可能残高</div><div style="font-size:14px" id="live-avail-num">${jpy(avail)}</div></div>
+<div><div style="color:#8b8f99;margin-bottom:4px">証拠金残高</div><div style="font-size:14px" id="live-margin-num">${jpy(marg)}</div></div>
 </div>
 <div style="display:flex;gap:8px;margin-top:16px">
 <span style="flex:1;text-align:center;border:1px solid #3a3d44;border-radius:8px;padding:9px 4px;font-size:12px;color:#eaecef">クロスマージン</span>
 <span style="flex:1;text-align:center;border:1px solid #3a3d44;border-radius:8px;padding:9px 4px;font-size:12px;color:#eaecef">現物 マージン取引 10x</span>
 </div>
-<div style="margin-top:10px;font-size:10px;color:#8b8f99">取得：${t}（API・円換算）</div>
+<div style="margin-top:10px;font-size:10px;color:#8b8f99">取得：<span id="live-at">${t}</span>（ライブ・円換算）</div>
 </div></div>`}
 
 function clientTrades(k){const sh={};k.ser.forEach((x,i)=>{sh[x.date]=i?k.ser[i-1].share:null});
@@ -107,6 +109,66 @@ async function bb(p,qs){const key=(getS('api_key')||'').trim(),sec=(getS('api_se
   throw new Error('Bybitでエラーが出ました（コード '+j.retCode+'）。少し時間をおいてもう一度お試しください')}
  throw last||new Error('Bybitから残高を取得できませんでした')}
 const TRADE_TYPES=['TRADE','SETTLEMENT','DELIVERY','LIQUIDATION','ADL','CURRENCY_BUY','CURRENCY_SELL','INTEREST','FEE_REFUND'];
+
+// ===== ライブ合計資産・未実現（master日次とは分離。日次r/持分/KPIには入れない） =====
+let _liveInflight=null;
+const _n=v=>{const n=Number(v);return isFinite(n)?n:null};
+async function _posUplSum(){
+  let sum=0,n=0,bits=[];
+  const jobs=[['linear','USDT'],['linear','USDC'],['inverse',null]];
+  for(const [cat,settle] of jobs){
+    let cursor='';
+    for(let page=0;page<10;page++){
+      let qs=`category=${cat}&limit=200`;
+      if(settle)qs+=`&settleCoin=${settle}`;
+      if(cursor)qs+=`&cursor=${encodeURIComponent(cursor)}`;
+      let r;try{r=await bb('/v5/position/list',qs)}catch(e){bits.push(cat+(settle||'')+':'+e.message);break}
+      for(const p of (r.list||[])){
+        const sz=_n(p.size)||0,u=_n(p.unrealisedPnl);
+        if(sz>0&&u!=null){sum+=u;n++}
+      }
+      cursor=r.nextPageCursor||'';
+      if(!cursor)break;
+    }
+  }
+  return {sum,n,bits};
+}
+async function fetchLiveWallet(force){
+  const now=Date.now();
+  let cached=null;try{cached=JSON.parse(getS('live_wallet')||'null')}catch{}
+  if(!force&&cached&&cached.at&&(now-cached.at)<60e3)return cached;
+  if(_liveInflight)return _liveInflight;
+  _liveInflight=(async()=>{
+    try{
+      if(!getS('api_key')||!getS('api_secret'))throw new Error('API未設定');
+      const w=await bb('/v5/account/wallet-balance','accountType=UNIFIED');
+      const W=(w.list&&w.list[0])||{};
+      const equity=_n(W.totalEquity),wallet=_n(W.totalWalletBalance),avail=_n(W.totalAvailableBalance),margin=_n(W.totalMarginBalance);
+      const perpUpl=_n(W.totalPerpUPL);
+      let coinUpl=0;for(const c of (W.coin||[])){const u=_n(c.unrealisedPnl);if(u!=null)coinUpl+=u}
+      // CONTRACT（参考・失敗しても続行）
+      let contractUpl=null,contractEq=null;
+      try{const cw=await bb('/v5/account/wallet-balance','accountType=CONTRACT');const C=(cw.list&&cw.list[0])||{};contractEq=_n(C.totalEquity);contractUpl=_n(C.totalPerpUPL);for(const c of (C.coin||[])){const u=_n(c.unrealisedPnl);if(u!=null)contractUpl=(contractUpl||0)+u}}catch(e){}
+      const pos=await _posUplSum();
+      // 未実現の優先: 建玉合計 → totalPerpUPL → coin合計 → CONTRACT
+      let upl=0,uplSrc='none';
+      if(pos.n>0&&isFinite(pos.sum)){upl=pos.sum;uplSrc='positions:'+pos.n}
+      else if(perpUpl!=null&&perpUpl!==0){upl=perpUpl;uplSrc='totalPerpUPL'}
+      else if(coinUpl){upl=coinUpl;uplSrc='coin.unrealisedPnl'}
+      else if(contractUpl){upl=contractUpl;uplSrc='CONTRACT'}
+      else if(perpUpl!=null){upl=perpUpl;uplSrc='totalPerpUPL(0)'}
+      const snap={equity,wallet,avail,margin,upl,uplSrc,perpUpl,coinUpl,posUpl:pos.sum,posCount:pos.n,contractUpl,contractEq,at:Date.now()};
+      setS('live_wallet',JSON.stringify(snap));
+      // 表示用互換（0:05のwallet_snapとは別用途だが最新で上書き可）
+      setS('wallet_snap',JSON.stringify({equity,wallet,upl,avail,margin,at:snap.at,uplSrc}));
+      try{save()}catch(e){}
+      console.log('live_wallet',JSON.stringify({equity,upl,uplYen:upl!=null?Math.round(upl*fx()):null,uplSrc,posCount:pos.n,perpUpl,coinUpl,contractUpl}));
+      return snap;
+    }finally{_liveInflight=null}
+  })();
+  return _liveInflight;
+}
+
 async function fetchMaster(){const now=Date.now();const date=jst(now-36e5);// 0:05実行時は前日終値として記録
  const w=await bb('/v5/account/wallet-balance','accountType=UNIFIED');const W=w.list[0]||{};const eq=Number(W.totalEquity);try{setS('wallet_snap',JSON.stringify({equity:eq,wallet:Number(W.totalWalletBalance),upl:Number(W.totalPerpUPL!=null?W.totalPerpUPL:W.totalUnrealisedPnl),avail:Number(W.totalAvailableBalance),margin:Number(W.totalMarginBalance),at:Date.now()}))}catch(e){}
  // 入出金を取引ログから検出し、損益から除外
@@ -128,7 +190,30 @@ async function ocrYen(f){try{const {data}=await require('tesseract.js').recogniz
 const CSS=fs.readFileSync('public/style.css','utf8');
 const refreshBanner=()=>`<button type="button" id="page-refresh-btn" aria-label="最新データを再読み込み" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.45);color:inherit;font:inherit;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent"><svg class="ri-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex-shrink:0"><path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M20 4v5h-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="ri-lbl">毎週月曜日に自動更新</span></button>
 <style>@keyframes ri-spin{to{transform:rotate(360deg)}}#page-refresh-btn.loading .ri-ico{animation:ri-spin .75s linear infinite}#page-refresh-btn:disabled{opacity:.85;cursor:wait}#page-refresh-btn:active:not(:disabled){transform:scale(.99)}</style>
-<script>(function(){var b=document.getElementById('page-refresh-btn');if(!b||b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',function(){if(b.classList.contains('loading'))return;b.classList.add('loading');b.disabled=true;var l=b.querySelector('.ri-lbl');if(l)l.textContent='更新中…';setTimeout(function(){location.reload()},450);});})();</script>`;
+<script>(function(){
+var path=location.pathname||'';
+var m=path.match(/^\/r\/([^\/]+)/);
+var token=m&&m[1];
+function fmtYen(v,sign){if(v==null||!isFinite(v))return '—';var a=Math.abs(v).toLocaleString('ja-JP',{minimumFractionDigits:2,maximumFractionDigits:2});return (sign?(v>0?'+':v<0?'-':''):(v<0?'-':''))+a+' JPY'}
+function fmtNum(v){if(v==null||!isFinite(v))return '—';return Math.abs(v).toLocaleString('ja-JP',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function applyLive(d){
+  var el;
+  if(d.equityYen!=null&&(el=document.getElementById('live-equity-num')))el.textContent=fmtNum(d.equityYen);
+  if((el=document.getElementById('live-wallet-num'))&&d.walletYen!=null)el.textContent=fmtYen(d.walletYen);
+  if((el=document.getElementById('live-upl-num'))&&d.uplYen!=null){el.textContent=(d.uplYen>0?'+':'')+fmtYen(d.uplYen);el.style.color=d.uplYen>=0?'#f7a600':'#ff6b6b'}
+  if((el=document.getElementById('live-avail-num'))&&d.availYen!=null)el.textContent=fmtYen(d.availYen);
+  if((el=document.getElementById('live-margin-num'))&&d.marginYen!=null)el.textContent=fmtYen(d.marginYen);
+  if((el=document.getElementById('live-at'))&&d.atJst)el.textContent=d.atJst;
+}
+function pullLive(force){
+  if(!token)return Promise.resolve();
+  return fetch('/r/'+token+'/live'+(force?'?force=1':''),{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&!d.error)applyLive(d);return d}).catch(function(){return null});
+}
+pullLive(false);
+var b=document.getElementById('page-refresh-btn');if(!b||b.dataset.bound)return;b.dataset.bound='1';
+b.addEventListener('click',function(){if(b.classList.contains('loading'))return;b.classList.add('loading');b.disabled=true;var l=b.querySelector('.ri-lbl');if(l)l.textContent='更新中…';
+pullLive(true).finally(function(){setTimeout(function(){location.reload()},400)});});
+})();</script>`;
 const page=(t,b)=>`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(t)}</title><style>${CSS}@media(max-width:760px){html,body{overflow-x:hidden}.wrap{padding:12px;max-width:100vw}input,select,textarea{font-size:16px!important;min-height:44px;width:100%}button,.btn{min-height:44px;font-size:16px;width:100%;justify-content:center}.form button{width:100%}.narrow{max-width:100%!important;margin:24px auto!important;padding-top:24px!important}.top{flex-direction:column;align-items:stretch}.anav{display:grid;grid-template-columns:1fr 1fr;gap:8px}.anav .btn{text-align:center;justify-content:center}}.usd{display:none!important}.pgt{margin-top:12px;flex-basis:100%;width:100%}.hd{flex-wrap:wrap}.dsr .pgt{padding:0 14px;box-sizing:border-box}.pgt .pr{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}.pgt .pr b{font-size:20px}.pgt .bar{height:14px;border-radius:7px;background:rgba(127,127,127,.25);overflow:hidden;margin:6px 0}.pgt .bar i{display:block;height:100%;background:#22c55e;border-radius:7px}@media(max-width:700px){html,body{overflow-x:hidden}main{width:auto!important;max-width:100%!important;padding:12px!important;box-sizing:border-box}.c3,.c2,.ds,.t2,.ac,.g2,.g3{display:grid!important;grid-template-columns:1fr!important}.ds{display:flex!important;flex-wrap:wrap}.ds div{flex:1 1 30%!important;border:0!important;padding:6px 0}.top{display:block!important}.dsr,.hd{display:block!important}.dsr>*{width:auto!important;max-width:100%!important}dl{font-size:14px!important}.pr,.chip,.nt,.lg,.t2 span,.gl,.ds span{font-size:12px!important}.ds small{font-size:9px!important}.bn{flex-direction:column!important;display:flex!important;gap:10px}section,.cd{min-width:0!important;max-width:100%!important;box-sizing:border-box}h1{font-size:22px!important}body{font-size:15px}.bv{font-size:28px!important}svg,img{max-width:100%;height:auto}dl{grid-template-columns:1fr auto!important}}</style><body><div class="wrap">${b}</div></body></html>`;
 function chart(ser,base){if(!ser.length)return '<p class="muted">データなし</p>';const W=600,H=230,P=60;const vs=[base,...ser.map(s=>s.balance)];let lo=Math.min(...vs),hi=Math.max(...vs);const pd=(hi-lo)*.2||hi*.03;lo-=pd;hi+=pd;
  const t0=new Date(ser[0].date),sp=Math.max(1,new Date(ser[ser.length-1].date)-t0);const X=d=>P+(W-P-14)*((new Date(d)-t0)/sp),Y=v=>H-30-(H-60)*(v-lo)/(hi-lo);
@@ -494,7 +579,7 @@ app.post('/admin/c/:id/balocr',upload.single('img'),async(q,s)=>{const id=q.para
  if(!(y>0))return s.redirect('/admin/c/'+id+'?ocr=fail&ocrfile='+encodeURIComponent(nm)+'&ocrdate='+encodeURIComponent(date)+'&m='+encodeURIComponent('読み取れませんでした'));
  // ocr query is yen integer for prefill (form uses yen); yen() display needs USDT so message uses yen(y/fx())
  s.redirect('/admin/c/'+id+'?ocr='+encodeURIComponent(String(Math.round(y)))+'&ocrfile='+encodeURIComponent(nm)+'&ocrdate='+encodeURIComponent(date)+'&m='+encodeURIComponent('スクショから読み取りました。金額を確認して保存してください'))});
-app.post('/admin/c/:id/bal',upload.single('img'),(q,s)=>{const id=q.params.id;const c=one('SELECT id FROM clients WHERE id=?',[id]);if(!c)return s.sendStatus(404);const date=(q.body.date||jst()).slice(0,10);const amt=Y2U(q.body.balance);if(!isFinite(amt)||amt<0)return R(s,id,'残高を正しく入力してください');let file=null;if(q.file){const f=q.file;const nm=f.filename+(path.extname(f.originalname).toLowerCase().replace(/[^.a-z]/g,'')||'.png');fs.renameSync(f.path,DATA_DIR+'/uploads/'+nm);run('INSERT INTO evidence(file,created,ocr_value,confirmed,kind,public,client_id) VALUES(?,?,?,?,?,?,?)',[nm,jst(),amt,1,'残高',0,id]);file=nm}else if(q.body.ocrfile&&/^[a-zA-Z0-9._-]+$/.test(q.body.ocrfile)&&fs.existsSync(DATA_DIR+'/uploads/'+q.body.ocrfile)){file=q.body.ocrfile;run('UPDATE evidence SET confirmed=1,ocr_value=?,public=0,client_id=? WHERE file=?',[amt,id,file])}
+app.post('/admin/c/:id/bal',upload.single('img'),(q,s)=>{try{rotateBackup('pre-bal')}catch(e){}const id=q.params.id;const c=one('SELECT id FROM clients WHERE id=?',[id]);if(!c)return s.sendStatus(404);const date=(q.body.date||jst()).slice(0,10);const amt=Y2U(q.body.balance);if(!isFinite(amt)||amt<0)return R(s,id,'残高を正しく入力してください');let file=null;if(q.file){const f=q.file;const nm=f.filename+(path.extname(f.originalname).toLowerCase().replace(/[^.a-z]/g,'')||'.png');fs.renameSync(f.path,DATA_DIR+'/uploads/'+nm);run('INSERT INTO evidence(file,created,ocr_value,confirmed,kind,public,client_id) VALUES(?,?,?,?,?,?,?)',[nm,jst(),amt,1,'残高',0,id]);file=nm}else if(q.body.ocrfile&&/^[a-zA-Z0-9._-]+$/.test(q.body.ocrfile)&&fs.existsSync(DATA_DIR+'/uploads/'+q.body.ocrfile)){file=q.body.ocrfile;run('UPDATE evidence SET confirmed=1,ocr_value=?,public=0,client_id=? WHERE file=?',[amt,id,file])}
  const ex=one('SELECT id,evidence_file FROM balances WHERE client_id=? AND date=?',[id,date]);if(ex)run('UPDATE balances SET amount=?,evidence_file=COALESCE(?,evidence_file),created=? WHERE id=?',[amt,file,jst(),ex.id]);else run('INSERT INTO balances(client_id,date,amount,evidence_file,created) VALUES(?,?,?,?,?)',[id,date,amt,file,jst()]);R(s,id,'残高を保存しました')});
 app.post('/admin/c/:id/delbal/:bid',(q,s)=>{run('DELETE FROM balances WHERE id=? AND client_id=?',[q.params.bid,q.params.id]);R(s,q.params.id,'残高記録を削除しました')});
 app.post('/admin/c/:id/dep',(q,s)=>{run('INSERT INTO deposits(client_id,date,amount) VALUES(?,?,?)',[q.params.id,q.body.date,Y2U(q.body.amount)]);R(s,q.params.id,'追加しました')});
@@ -519,6 +604,20 @@ app.post('/admin/master/pub/:e',(q,s)=>{run('UPDATE evidence SET public=1-public
 app.post('/admin/master/del/:d',(q,s)=>{run('DELETE FROM master WHERE date=?',[q.params.d]);s.redirect('/admin/master')});
 app.get('/e/:f',(q,s)=>{const e=one('SELECT * FROM evidence WHERE file=? AND public=1',[q.params.f]);e?s.sendFile(path.resolve(DATA_DIR+'/uploads/'+e.file)):s.sendStatus(404)});
 app.get('/r/:t/report',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send(themeOf(c,q.query)=='c'?report2C(c):report2(c)):s.sendStatus(404)});
+app.get('/r/:t/live',async(q,s)=>{
+  const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);if(!c)return s.sendStatus(404);
+  try{
+    const force=String(q.query.force||'')==='1';
+    const snap=await fetchLiveWallet(force);
+    const rate=fx();
+    const y=v=>v==null||!isFinite(v)?null:Math.round(Number(v)*rate*100)/100;
+    const at=snap.at||Date.now();
+    const atJst=new Date(at+9*36e5).toISOString().slice(0,16).replace('T',' ');
+    s.json({equity:snap.equity,wallet:snap.wallet,upl:snap.upl,avail:snap.avail,margin:snap.margin,
+      equityYen:y(snap.equity),walletYen:y(snap.wallet),uplYen:y(snap.upl),availYen:y(snap.avail),marginYen:y(snap.margin),
+      at,atJst,uplSrc:snap.uplSrc||'',posCount:snap.posCount||0});
+  }catch(e){console.error('live',e&&e.message);s.status(502).json({error:'取得に失敗しました'})}
+});
 app.get('/r/:t',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);c?s.send((t=>t=='b'?reportB:t=='c'?reportC:report)(themeOf(c,q.query))(c,q.query.m)):s.status(404).send(page('なし','<section class="card"><h2>ページが見つかりません</h2></section>'))});
 const MANUAL='<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>運用報告サイト 管理画面の説明書</title><style>body{margin:0;background:#0b2a20;color:#e8efe9;font:16px/1.8 -apple-system,"Hiragino Sans",sans-serif}main{max-width:760px;margin:0 auto;padding:28px 18px 60px}h1{font-size:24px;margin:0 0 4px}h2{font-size:19px;color:#ff9a3c;border-left:4px solid #ff9a3c;padding-left:10px;margin:34px 0 10px}.card{background:#123a2d;border-radius:14px;padding:16px 18px;margin:12px 0}ol,ul{padding-left:22px}code{background:#0b2a20;padding:1px 6px;border-radius:6px}.warn{background:#3a2412;border:1px solid #ff9a3c}.mu{color:#a9c2b6;font-size:14px}a{color:#ffb46b}.usd{display:none!important}.pgt{margin-top:12px;flex-basis:100%;width:100%}.hd{flex-wrap:wrap}.dsr .pgt{padding:0 14px;box-sizing:border-box}.pgt .pr{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}.pgt .pr b{font-size:20px}.pgt .bar{height:14px;border-radius:7px;background:rgba(127,127,127,.25);overflow:hidden;margin:6px 0}.pgt .bar i{display:block;height:100%;background:#22c55e;border-radius:7px}@media(max-width:700px){html,body{overflow-x:hidden}main{width:auto!important;max-width:100%!important;padding:12px!important;box-sizing:border-box}.c3,.c2,.ds,.t2,.ac,.g2,.g3{display:grid!important;grid-template-columns:1fr!important}.ds{display:flex!important;flex-wrap:wrap}.ds div{flex:1 1 30%!important;border:0!important;padding:6px 0}.top{display:block!important}.dsr,.hd{display:block!important}.dsr>*{width:auto!important;max-width:100%!important}dl{font-size:14px!important}.pr,.chip,.nt,.lg,.t2 span,.gl,.ds span{font-size:12px!important}.ds small{font-size:9px!important}.bn{flex-direction:column!important;display:flex!important;gap:10px}section,.cd{min-width:0!important;max-width:100%!important;box-sizing:border-box}h1{font-size:22px!important}body{font-size:15px}.bv{font-size:28px!important}svg,img{max-width:100%;height:auto}dl{grid-template-columns:1fr auto!important}}</style><body><main><h1>運用報告サイト 管理画面の説明書</h1><p class="mu">チームの方向けの使い方です。お客様には見せないでください。</p><h2>1. ログイン</h2><div class="card"><ol><li><a href="/admin/login">管理画面ログイン</a> を開きます。</li><li>管理者から聞いたパスワードを入れて「ログイン」を押します。</li><li>パスワードを5回まちがえると、15分間ログインできなくなります。</li></ol><p class="mu">パスワードはLINEやチャットに書かず、口頭などで共有してください。</p></div><h2>2. クライアント一覧（トップ画面）</h2><div class="card"><ul><li>全員の軍資金・現在残高・損益・損益率が一覧で見られます。</li><li>名前を押すと、その人の詳細画面に進みます。</li><li>「CSVで書き出し」で、全員分の数字と専用URLをまとめてダウンロードできます。</li></ul></div><h2>3. お客様を1人追加する</h2><div class="card"><ol><li>一覧の「クライアント追加」を押します。</li><li>名前・軍資金（円）・開始日を入れて「追加して詳細へ」を押します。</li><li>詳細画面で、満期日・元本・手数料率・目標倍率などを入れて「保存」を押します。満期日が空なら、開始日から1年後になります。</li><li>詳細画面に出る<b>専用URL</b>をコピーして、本人だけに送ります。</li></ol></div><h2>4. お客様をまとめて追加する（CSV）</h2><div class="card"><ol><li>メニューの「CSV一括登録」を開きます。</li><li>「サンプルCSVをダウンロード」で見本を取って、同じ形でExcelなどに入力します。必須は<b>名前・軍資金・開始日</b>の3つです。</li><li>ファイルを選んで「内容を確認」を押し、中身を見てから登録します。</li><li>同じ名前の人がいる場合は、上書き更新されます。</li></ol></div><h2>5. 入金・出金を記録する</h2><div class="card"><ul><li>お客様が途中でお金を足したときは、その人の詳細画面の「入金を登録」に日付と金額を入れて登録します。</li><li>全体口座への入出金は、利益に含まれないよう自動で除外されます。</li></ul></div><h2>6. 残高の更新</h2><div class="card"><ul><li>お客様ごとの詳細画面の「現在の残高を入力」に、実際の残高（円）と日付を入れて「残高を保存」を押します。Bybitのスクショも添付できます。</li><li>入れた残高をもとに、利益・手数料・ご返却予定額が自動計算され、レポートに反映されます。同じ日付は上書きされます。</li><li>手入力がないお客様は、これまで通り共有口座の自動計算を使います。</li><li>共有口座全体は、毎日0時5分（日本時間）にBybitから取得します。「共有口座」画面の「今すぐ取得」でも更新できます。</li></ul></div><h2>7. Bybitの画面（スクショ）を載せる</h2><div class="card"><ol><li>お客様の詳細画面、または「共有口座」画面で画像を選んでアップロードします。</li><li>載せた画像は、全員のページの「Bybit取引画面」に表示されます。</li><li>出したくない画像は「証跡画像」で「非公開にする」を押します。</li></ol><p class="mu">個人情報やAPIキーが写った画像は載せないでください。</p></div><h2>8. 見た目（デザイン）を変える</h2><div class="card"><ul><li>全員の標準は「共有口座設定」のデザインタイプで変えます（標準はタイプC：深緑×オレンジ）。</li><li>1人だけ変えたいときは、その人の詳細画面でタイプを選びます。</li></ul></div><h2>9. URLが外にもれたとき</h2><div class="card"><ol><li>その人の詳細画面で専用URLの横の「再発行」を押します。</li><li>古いURLはすぐ使えなくなるので、新しいURLを本人に送りなおします。</li></ol></div><h2>10. お客様を削除する</h2><div class="card"><p>詳細画面の一番下の「クライアントを削除」を押します。<b>元に戻せない</b>ので注意してください。</p></div><h2>11. 会員ログイン</h2><div class="card"><ol><li>お客様の詳細画面の「会員ログイン」で、会員IDを確認します（はじめから自動で作られています）。</li><li>「パスワードを自動で作る」を押すと、読みまちがえにくい10文字のパスワードが作られ、1回だけ表示されます。「コピー」してお客様に伝えたら、画面を閉じてください（あとから再表示はできません）。自分で決めたいときは「新しいパスワード」を入れて「パスワードを設定」を押します。</li><li>ログインURL（/login）と会員ID・パスワードをお客様に伝えます。ログインすると、そのお客様のレポートが開きます。</li><li>5回まちがえると15分間ログインできません。IDを変えたいときは「会員IDを作り直す」を押します。</li></ol><p>これまでの専用URL（/r/…）もそのまま使えます。</p></div><h2>やってはいけないこと</h2><div class="card warn"><ul><li>パスワードやAPIキーを、チャット・メール・画像で送らない。</li><li>他のお客様のURLを、別のお客様に送らない。</li><li>APIキーは必ず「読み取り専用」で作る（「共有口座設定」で登録します）。</li></ul></div></main></body></html>';app.get('/manual',(q,s)=>s.send(MANUAL));app.get('/',(q,s)=>s.redirect('/admin'));
 global.__app=app;global.__ready=initSql({locateFile:f=>require('path').join(path.dirname(require.resolve('sql.js')),f)}).then(SQL=>{db=fs.existsSync(DBF)?new SQL.Database(fs.readFileSync(DBF)):new SQL.Database();
@@ -532,5 +631,5 @@ try{db.run('CREATE UNIQUE INDEX IF NOT EXISTS ux_bal_client_date ON balances(cli
 if(process.env.SEED_SAMPLE=='1'&&!one('SELECT id FROM clients')&&!one('SELECT date FROM master'))require('./seed')(db,crypto);save();
 try{if(fs.existsSync(DBF)){rotateBackup('startup');console.log('DB:',DBF,'size',fs.statSync(DBF).size,'clients',(all('SELECT COUNT(*) c FROM clients')[0]||{}).c)}}catch(e){console.error('startup backup',e&&e.message)}
 async function fetchFx(){try{const r=await fetch('https://open.er-api.com/v6/latest/USD');const j=await r.json();const v=j&&j.rates&&Number(j.rates.JPY);if(v>50&&v<500){setS('usdt_jpy_live',String(v));setS('usdt_jpy_live_at',new Date(Date.now()+9*36e5).toISOString().slice(0,16).replace('T',' '));if(typeof save=='function')save()}}catch(e){console.error('fx',e.message)}}
-if(require.main===module){fetchFx();setInterval(fetchFx,6*36e5);cron.schedule('5 0 * * *',async()=>{try{if(getS('api_key'))console.log(await fetchMaster())}catch(e){console.error('fetch',e.message)}},{timezone:'Asia/Tokyo'});cron.schedule('10 3 * * *',()=>{try{rotateBackup('daily')}catch(e){console.error('daily backup',e&&e.message)}},{timezone:'Asia/Tokyo'});{const st=db.prepare('SELECT id FROM clients WHERE member_id IS NULL');const ids=[];while(st.step())ids.push(st.get()[0]);st.free();for(const i of ids)db.run('UPDATE clients SET member_id=? WHERE id=?',[genMid(),i]);if(ids.length)save()}app.listen(PORT,()=>console.log('http://localhost:'+PORT,'DATA_DIR='+DATA_DIR))}
+if(require.main===module){fetchFx();setInterval(fetchFx,6*36e5);cron.schedule('5 0 * * *',async()=>{try{if(getS('api_key'))console.log(await fetchMaster())}catch(e){console.error('fetch',e.message)}},{timezone:'Asia/Tokyo'});cron.schedule('*/5 * * * *',async()=>{try{if(getS('api_key'))await fetchLiveWallet(true)}catch(e){console.error('live5',e&&e.message)}},{timezone:'Asia/Tokyo'});setTimeout(()=>{fetchLiveWallet(true).catch(e=>console.error('live0',e&&e.message))},2500);cron.schedule('10 3 * * *',()=>{try{rotateBackup('daily')}catch(e){console.error('daily backup',e&&e.message)}},{timezone:'Asia/Tokyo'});{const st=db.prepare('SELECT id FROM clients WHERE member_id IS NULL');const ids=[];while(st.step())ids.push(st.get()[0]);st.free();for(const i of ids)db.run('UPDATE clients SET member_id=? WHERE id=?',[genMid(),i]);if(ids.length)save()}app.listen(PORT,()=>console.log('http://localhost:'+PORT,'DATA_DIR='+DATA_DIR))}
 module.exports={clientCalc,masterSeries,all,db:()=>db}});
