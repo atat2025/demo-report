@@ -707,6 +707,36 @@ async function fetchFx(){try{const r=await fetch('https://open.er-api.com/v6/lat
 
 
 // 久積様: 管理画面で残高入力した行だけ source=admin。freeze/backfill は別扱い（行は残し、一覧表示のみ空白）。
+
+// v2: freeze_new_autos 行を誤って admin にした分を直し、入力済みは証跡/佐藤/freeze前フォーム行のみ。
+function markBalanceSourceV2(){
+  if(getS('mark_balance_source_v2')==='1'){console.log('mark_balance_source_v2 skip');return}
+  // 久積様が管理画面残高フォームで入れたことが確認できるクライアント（freeze前の既存行＋浜田restore＋佐藤）
+  const adminName=/野村|佐藤|武田|塚田|勝又|西野|北村|浜田|萩野谷|佐々木|鈴木/;
+  const before={admin:[],freeze:[]},after={admin:[],freeze:[]};
+  for(const c of all('SELECT * FROM clients ORDER BY id')){
+    if(isAdminEntered(c))before.admin.push(c.name);else before.freeze.push(c.name);
+  }
+  for(const b of all('SELECT b.id,b.evidence_file,b.source,c.name FROM balances b JOIN clients c ON c.id=b.client_id')){
+    let src='freeze';
+    if(b.evidence_file)src='admin';
+    else if(adminName.test(b.name))src='admin';
+    else if(b.source==='admin'&&adminName.test(b.name))src='admin';
+    else src='freeze';
+    db.run('UPDATE balances SET source=? WHERE id=?',[src,b.id]);
+  }
+  for(const c of all('SELECT * FROM clients ORDER BY id')){
+    if(isAdminEntered(c))after.admin.push(c.name);else after.freeze.push(c.name);
+  }
+  setS('mark_balance_source_v2','1');
+  save();
+  console.log('mark_balance_source_v2 before_entered',before.admin.join('|')||'(none)');
+  console.log('mark_balance_source_v2 before_blank',before.freeze.join('|')||'(none)');
+  console.log('mark_balance_source_v2 after_entered',after.admin.join('|')||'(none)');
+  console.log('mark_balance_source_v2 after_blank',after.freeze.join('|')||'(none)');
+  console.log('mark_balance_source_v2 counts',JSON.stringify({before:{entered:before.admin.length,blank:before.freeze.length},after:{entered:after.admin.length,blank:after.freeze.length}}));
+}
+
 function markBalanceSourceV1(){
   if(getS('mark_balance_source_v1')==='1'){console.log('mark_balance_source_v1 skip');return}
   try{rotateBackup('pre-mark-source-v1')}catch(e){console.error('pre-mark-source',e&&e.message)}
@@ -720,9 +750,10 @@ function markBalanceSourceV1(){
     const L=latestBalance(c);
     if(L)before.shown.push(c.name);else before.hidden.push(c.name);
   }
+  const adminName=/野村|佐藤|武田|塚田|勝又|西野|北村|浜田|萩野谷|佐々木|鈴木/;
   for(const b of all('SELECT b.id,b.evidence_file,c.name FROM balances b JOIN clients c ON c.id=b.client_id')){
-    // freeze_prev_auto 挿入分のみ freeze。証跡あり・佐藤・それ以外の既存フォーム行・浜田restoreは admin
-    const src=(freezeNames.test(b.name)&&!b.evidence_file)?'freeze':'admin';
+    // 証跡あり、または freeze 前にフォーム入力済みの既知クライアントのみ admin。freeze_prev_auto / freeze_new_autos は freeze。
+    const src=(b.evidence_file||adminName.test(b.name))?'admin':'freeze';
     db.run('UPDATE balances SET source=? WHERE id=?',[src,b.id]);
   }
   for(const c of all('SELECT * FROM clients ORDER BY id')){
@@ -810,7 +841,7 @@ async function verifyFetchDecoupleOnce(){
   save();
 }
 
-if(require.main===module){try{rotateBackup('boot')}catch(e){console.error('boot-backup',e&&e.message)}try{console.log('client_index',all('SELECT name,token,start_date FROM clients ORDER BY id').map(c=>c.name+'|'+c.token+'|'+c.start_date).join(';;'))}catch(e){console.error('client_index',e&&e.message)};try{console.log('bal_index',all('SELECT c.name,b.id,b.date,b.amount,b.created,b.evidence_file FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id').map(r=>[r.name,r.id,r.date,r.amount,r.created,r.evidence_file||''].join('|')).join(';;')||'(none)')}catch(e){console.error('bal_index',e&&e.message)}try{const fs=require('fs'),path=require('path');const dump=(label,database)=>{try{const cols=[];const ci=database.prepare('PRAGMA table_info(balances)');while(ci.step())cols.push(ci.getAsObject().name);ci.free();const hasYen=cols.includes('amount_yen');const sql=hasYen?'SELECT c.name,b.id,b.date,b.amount,b.amount_yen,b.created FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id':'SELECT c.name,b.id,b.date,b.amount,NULL as amount_yen,b.created FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id';const rows=[];const st=database.prepare(sql);while(st.step()){const o=st.getAsObject();rows.push([o.name,o.id,o.date,o.amount,o.amount_yen,o.created].join('|'))}st.free();console.log('bal_dump_'+label,rows.join(';;')||'(none)');const hit=rows.filter(r=>/2344|佐藤|1606|2499/.test(r));if(hit.length)console.log('bal_hit_'+label,hit.join(';;'))}catch(e){console.error('bal_dump_'+label,e&&e.message)}};dump('live',db);try{const mt=all('SELECT date,equity,flow,source FROM master ORDER BY date DESC LIMIT 5');console.log('master_tail',mt.map(x=>[x.date,x.equity,x.flow,x.source].join('|')).join(';;'))}catch(e){console.error('master_tail',e&&e.message)}try{const ms=masterSeries();const msPrev=ms.length>1?ms.slice(0,-1):ms;const fxv=fx();const prev=[];for(const c of all('SELECT * FROM clients ORDER BY id')){const rows=clientBalances(c.id);const kFull=clientCalc(c,ms);const kPrev=clientCalc(c,msPrev);prev.push([c.name,rows.length?'MAN':'AUTO',Math.round((rows.length?(kFull.fullBalYen!=null?kFull.fullBalYen:kFull.bal*fxv):kFull.bal*fxv)),Math.round(kPrev.bal*fxv),Math.round(c.capital*fxv)].join('|'))}console.log('freeze_preview',prev.join(';;'))}catch(e){console.error('freeze_preview',e&&e.message)}const bdir=DATA_DIR+'/backups';if(fs.existsSync(bdir)){fs.readdirSync(bdir).filter(x=>/^app-.*\.db$/.test(x)).map(x=>({x,m:fs.statSync(path.join(bdir,x)).mtimeMs})).sort((a,b)=>b.m-a.m).slice(0,40).forEach(({x})=>{try{const bdb=new SQL.Database(fs.readFileSync(path.join(bdir,x)));dump(x.replace(/[^a-z0-9_-]/gi,'').slice(0,64),bdb);try{bdb.close()}catch{}}catch(e){console.error('bal_bak',x,e&&e.message)}})}}catch(e){console.error('bal_dump',e&&e.message)}try{freezeHoldingsV1()}catch(e){console.error('freeze_v1',e&&e.message)}try{freezeNewAutos()}catch(e){console.error('freeze_new_autos',e&&e.message)}try{markBalanceSourceV1()}catch(e){console.error('mark_balance_source_v1',e&&e.message)}
+if(require.main===module){try{rotateBackup('boot')}catch(e){console.error('boot-backup',e&&e.message)}try{console.log('client_index',all('SELECT name,token,start_date FROM clients ORDER BY id').map(c=>c.name+'|'+c.token+'|'+c.start_date).join(';;'))}catch(e){console.error('client_index',e&&e.message)};try{console.log('bal_index',all('SELECT c.name,b.id,b.date,b.amount,b.created,b.evidence_file FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id').map(r=>[r.name,r.id,r.date,r.amount,r.created,r.evidence_file||''].join('|')).join(';;')||'(none)')}catch(e){console.error('bal_index',e&&e.message)}try{const fs=require('fs'),path=require('path');const dump=(label,database)=>{try{const cols=[];const ci=database.prepare('PRAGMA table_info(balances)');while(ci.step())cols.push(ci.getAsObject().name);ci.free();const hasYen=cols.includes('amount_yen');const sql=hasYen?'SELECT c.name,b.id,b.date,b.amount,b.amount_yen,b.created FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id':'SELECT c.name,b.id,b.date,b.amount,NULL as amount_yen,b.created FROM balances b JOIN clients c ON c.id=b.client_id ORDER BY c.id,b.date,b.id';const rows=[];const st=database.prepare(sql);while(st.step()){const o=st.getAsObject();rows.push([o.name,o.id,o.date,o.amount,o.amount_yen,o.created].join('|'))}st.free();console.log('bal_dump_'+label,rows.join(';;')||'(none)');const hit=rows.filter(r=>/2344|佐藤|1606|2499/.test(r));if(hit.length)console.log('bal_hit_'+label,hit.join(';;'))}catch(e){console.error('bal_dump_'+label,e&&e.message)}};dump('live',db);try{const mt=all('SELECT date,equity,flow,source FROM master ORDER BY date DESC LIMIT 5');console.log('master_tail',mt.map(x=>[x.date,x.equity,x.flow,x.source].join('|')).join(';;'))}catch(e){console.error('master_tail',e&&e.message)}try{const ms=masterSeries();const msPrev=ms.length>1?ms.slice(0,-1):ms;const fxv=fx();const prev=[];for(const c of all('SELECT * FROM clients ORDER BY id')){const rows=clientBalances(c.id);const kFull=clientCalc(c,ms);const kPrev=clientCalc(c,msPrev);prev.push([c.name,rows.length?'MAN':'AUTO',Math.round((rows.length?(kFull.fullBalYen!=null?kFull.fullBalYen:kFull.bal*fxv):kFull.bal*fxv)),Math.round(kPrev.bal*fxv),Math.round(c.capital*fxv)].join('|'))}console.log('freeze_preview',prev.join(';;'))}catch(e){console.error('freeze_preview',e&&e.message)}const bdir=DATA_DIR+'/backups';if(fs.existsSync(bdir)){fs.readdirSync(bdir).filter(x=>/^app-.*\.db$/.test(x)).map(x=>({x,m:fs.statSync(path.join(bdir,x)).mtimeMs})).sort((a,b)=>b.m-a.m).slice(0,40).forEach(({x})=>{try{const bdb=new SQL.Database(fs.readFileSync(path.join(bdir,x)));dump(x.replace(/[^a-z0-9_-]/gi,'').slice(0,64),bdb);try{bdb.close()}catch{}}catch(e){console.error('bal_bak',x,e&&e.message)}})}}catch(e){console.error('bal_dump',e&&e.message)}try{freezeHoldingsV1()}catch(e){console.error('freeze_v1',e&&e.message)}try{freezeNewAutos()}catch(e){console.error('freeze_new_autos',e&&e.message)}try{markBalanceSourceV1()}catch(e){console.error('mark_balance_source_v1',e&&e.message)}try{markBalanceSourceV2()}catch(e){console.error('mark_balance_source_v2',e&&e.message)}
 try{
   if(getS('align_amount_to_yen_v1')!=='1'){
     const fxv=fx();let n=0;
