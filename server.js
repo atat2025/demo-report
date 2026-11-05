@@ -155,9 +155,11 @@ async function _posUplSum(){
   return {sum,n,bits};
 }
 async function fetchLiveWallet(force){
+  // Bybitアプリ一致: UNIFIED wallet-balance の totalWalletBalance / totalPerpUPL を正とする。
+  // force またはキャッシュなし要求時は必ず再取得。建玉合計は totalPerpUPL 欠落時のみ。
   const now=Date.now();
   let cached=null;try{cached=JSON.parse(getS('live_wallet')||'null')}catch{}
-  if(!force&&cached&&cached.at&&(now-cached.at)<60e3)return cached;
+  if(!force&&cached&&cached.at&&(now-cached.at)<5e3&&cached.uplSrc&&String(cached.uplSrc).startsWith('totalPerpUPL'))return cached;
   if(_liveInflight)return _liveInflight;
   _liveInflight=(async()=>{
     try{
@@ -167,23 +169,23 @@ async function fetchLiveWallet(force){
       const equity=_n(W.totalEquity),wallet=_n(W.totalWalletBalance),avail=_n(W.totalAvailableBalance),margin=_n(W.totalMarginBalance);
       const perpUpl=_n(W.totalPerpUPL);
       let coinUpl=0;for(const c of (W.coin||[])){const u=_n(c.unrealisedPnl);if(u!=null)coinUpl+=u}
-      // CONTRACT（参考・失敗しても続行）
       let contractUpl=null,contractEq=null;
       try{const cw=await bb('/v5/account/wallet-balance','accountType=CONTRACT');const C=(cw.list&&cw.list[0])||{};contractEq=_n(C.totalEquity);contractUpl=_n(C.totalPerpUPL);for(const c of (C.coin||[])){const u=_n(c.unrealisedPnl);if(u!=null)contractUpl=(contractUpl||0)+u}}catch(e){}
-      const pos=await _posUplSum();
-      // 未実現の優先: 建玉合計 → totalPerpUPL → coin合計 → CONTRACT
-      let upl=0,uplSrc='none';
-      if(pos.n>0&&isFinite(pos.sum)){upl=pos.sum;uplSrc='positions:'+pos.n}
-      else if(perpUpl!=null&&perpUpl!==0){upl=perpUpl;uplSrc='totalPerpUPL'}
+      // 未実現: 口座レベルの totalPerpUPL を最優先（決済後の stale 建玉合計を出さない）
+      let upl=0,uplSrc='none',pos={sum:0,n:0};
+      if(perpUpl!=null&&isFinite(perpUpl)){upl=perpUpl;uplSrc='totalPerpUPL'}
       else if(coinUpl){upl=coinUpl;uplSrc='coin.unrealisedPnl'}
-      else if(contractUpl){upl=contractUpl;uplSrc='CONTRACT'}
-      else if(perpUpl!=null){upl=perpUpl;uplSrc='totalPerpUPL(0)'}
+      else {
+        pos=await _posUplSum();
+        if(pos.n>0&&isFinite(pos.sum)){upl=pos.sum;uplSrc='positions:'+pos.n}
+        else if(contractUpl!=null&&isFinite(contractUpl)){upl=contractUpl;uplSrc='CONTRACT'}
+      }
+      if(uplSrc==='totalPerpUPL'||uplSrc==='coin.unrealisedPnl'){try{pos=await _posUplSum()}catch(e){pos={sum:0,n:0}}}
       const snap={equity,wallet,avail,margin,upl,uplSrc,perpUpl,coinUpl,posUpl:pos.sum,posCount:pos.n,contractUpl,contractEq,at:Date.now()};
       setS('live_wallet',JSON.stringify(snap));
-      // 表示用互換（0:05のwallet_snapとは別用途だが最新で上書き可）
       setS('wallet_snap',JSON.stringify({equity,wallet,upl,avail,margin,at:snap.at,uplSrc}));
       try{save()}catch(e){}
-      console.log('live_wallet',JSON.stringify({equity,upl,uplYen:upl!=null?Math.round(upl*fx()):null,uplSrc,posCount:pos.n,perpUpl,coinUpl,contractUpl}));
+      console.log('live_wallet',JSON.stringify({equity,wallet,upl,uplYen:upl!=null?Math.round(upl*fx()):null,walletYen:wallet!=null?Math.round(wallet*fx()):null,uplSrc,posCount:pos.n,perpUpl}));
       return snap;
     }finally{_liveInflight=null}
   })();
@@ -230,7 +232,7 @@ function pullLive(force){
   if(!token)return Promise.resolve();
   return fetch('/r/'+token+'/live'+(force?'?force=1':''),{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&!d.error)applyLive(d);return d}).catch(function(){return null});
 }
-pullLive(false);
+pullLive(true);
 var b=document.getElementById('page-refresh-btn');if(!b||b.dataset.bound)return;b.dataset.bound='1';
 b.addEventListener('click',function(){if(b.classList.contains('loading'))return;b.classList.add('loading');b.disabled=true;var l=b.querySelector('.ri-lbl');if(l)l.textContent='更新中…';
 pullLive(true).finally(function(){setTimeout(function(){location.reload()},400)});});
@@ -680,8 +682,7 @@ app.get('/r/:t/report',(q,s)=>{const c=one('SELECT * FROM clients WHERE token=?'
 app.get('/r/:t/live',async(q,s)=>{
   const c=one('SELECT * FROM clients WHERE token=?',[q.params.t]);if(!c)return s.sendStatus(404);
   try{
-    const force=String(q.query.force||'')==='1';
-    const snap=await fetchLiveWallet(force);
+    const snap=await fetchLiveWallet(true); // always fresh vs Bybit app
     const rate=fx();
     const y=v=>v==null||!isFinite(v)?null:Math.round(Number(v)*rate*100)/100;
     const at=snap.at||Date.now();
