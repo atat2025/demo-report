@@ -11,9 +11,11 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@sparticuz/chromium": "^133.0.0",
     "express": "^5.3.0",
     "multer": "^2.5.0",
     "node-cron": "^4.6.0",
+    "puppeteer-core": "^24.2.0",
     "sql.js": "^1.15.2",
     "tesseract.js": "^7.0.0"
   }

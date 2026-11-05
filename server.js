@@ -8,13 +8,14 @@ if(IS_PROD&&!process.env.DATA_DIR){
   console.error('CRITICAL: DATA_DIR is unset in production. Client data must live on the mounted disk (set DATA_DIR=/var/data). Will NOT fall back to ephemeral ./data.');
   if(fs.existsSync('/var/data')){DATA_DIR='/var/data';console.error('CRITICAL: using /var/data because it exists')}
 }
-try{fs.mkdirSync(DATA_DIR+'/uploads',{recursive:true});fs.mkdirSync(DATA_DIR+'/backups',{recursive:true})}
+try{fs.mkdirSync(DATA_DIR+'/uploads',{recursive:true});fs.mkdirSync(DATA_DIR+'/backups',{recursive:true});fs.mkdirSync(DATA_DIR+'/reports',{recursive:true});fs.mkdirSync(DATA_DIR+'/report-backups',{recursive:true})}
 catch(e){
   console.error('CRITICAL: cannot create DATA_DIR',DATA_DIR,e&&e.message);
   if(IS_PROD){console.error('CRITICAL: refusing to fall back to ./data in production (would risk wiping client data)');}
   else{console.error('DATA_DIR fallback to ./data (dev only)',e&&e.code);DATA_DIR='data';fs.mkdirSync(DATA_DIR+'/uploads',{recursive:true});fs.mkdirSync(DATA_DIR+'/backups',{recursive:true})}
 }
 const DBF=DATA_DIR+'/app.db';
+const reportSnap=require('./reportSnap');
 // Never copy a starter DB over an existing one. Only seed when SEED_SAMPLE=1 AND no DB file yet.
 if(process.env.SEED_SAMPLE=='1'&&!fs.existsSync(DBF)&&fs.existsSync(path.join(__dirname,'seed/app.db'))){
   fs.copyFileSync(path.join(__dirname,'seed/app.db'),DBF);
@@ -615,7 +616,7 @@ const cpy=v=>`<div class="ui"><input readonly value="${esc(v)}" onclick="this.se
 app.get('/admin',(q,s)=>{const ms=masterSeries();const cs=all('SELECT * FROM clients ORDER BY start_date,id').map(c=>({c,k:clientCalc(c,ms)}));const last=ms[ms.length-1];const hasKey=!!getS('api_key');const lt=getS('last_ts');const lts=lt?new Date(Number(lt)+9*36e5).toISOString().slice(0,16).replace('T',' '):(last?last.date:'—');
  s.send(apage('クライアント一覧',`<div class="ah"><h1>管理画面</h1><div class="an"><a class="b" href="/admin/new">＋クライアント追加</a><a class="b o" href="/admin/import">CSVインポート</a></div></div>${anav('/admin')}<div style="height:14px"></div>${aflash(q)}
 <section class="k"><h2>共有Bybit口座</h2><div class="sm"><div><span>全体口座残高</span><b>${last?u(last.equity):'—'}</b></div><div><span>前日比</span><b class="${last&&last.r<0?'ng':'ok'}">${last?pct(last.r):'—'}</b></div><div><span>APIステータス</span><b class="${hasKey?'ok':'ng'}" style="font-size:15px">${hasKey?'● 接続設定済み':'● 未設定'}</b></div><div><span>最終取得</span><b style="font-size:15px">${lts}</b></div><form method="post" action="/admin/master/fetch?back=/admin"><button class="b" ${hasKey?'':'disabled title="共有口座設定でAPIキーを登録してください"'}>今すぐ取得</button></form></div></section>
-<section class="k" style="padding:0;overflow:hidden"><table><tr><th>クライアント</th><th class="n">軍資金</th><th class="n">現在の持分残高</th><th class="n">損益率</th><th>専用URL</th><th>編集・更新</th></tr>${cs.map(({c,k})=>`<tr><td data-l="クライアント"><b>${esc(c.name)}</b><div class="mu">開始 ${c.start_date}</div></td><td data-l="軍資金" class="n">${u(k.inv,0)}</td><td data-l="現在の持分残高" class="n">${isAdminEntered(c)?`<b>${balYen(k)}</b>`:''}</td><td data-l="損益率" class="n ${isAdminEntered(c)?(k.rate>=0?'ok':'ng'):''}">${isAdminEntered(c)?pct(k.rate):''}</td><td data-l="専用URL">${cpy(BASE()+'/r/'+c.token)}</div></td><td data-l="操作"><a class="b s" href="/admin/c/${c.id}">編集・更新</a></td></tr>`).join('')||'<tr><td class="mu">クライアントがいません</td></tr>'}</table></section><p class="mu"><a href="/admin/export.csv">CSVで書き出し（専用URL付き）</a></p>`))});
+<section class="k" style="padding:0;overflow:hidden"><table><tr><th>クライアント</th><th class="n">軍資金</th><th class="n">現在の持分残高</th><th class="n">損益率</th><th>専用URL</th><th>編集・報告</th></tr>${cs.map(({c,k})=>`<tr><td data-l="クライアント"><b>${esc(c.name)}</b><div class="mu">開始 ${c.start_date}</div></td><td data-l="軍資金" class="n">${u(k.inv,0)}</td><td data-l="現在の持分残高" class="n">${isAdminEntered(c)?`<b>${balYen(k)}</b>`:''}</td><td data-l="損益率" class="n ${isAdminEntered(c)?(k.rate>=0?'ok':'ng'):''}">${isAdminEntered(c)?pct(k.rate):''}</td><td data-l="専用URL">${cpy(BASE()+'/r/'+c.token)}</div></td><td data-l="操作" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><a class="b s" href="/admin/c/${c.id}">編集・更新</a><form method="post" action="/admin/c/${c.id}/reported" style="margin:0;display:inline"><button class="b s" type="submit">報告済み</button></form><a class="b s o" href="/admin/c/${c.id}/reports">報告履歴</a></td></tr>`).join('')||'<tr><td class="mu">クライアントがいません</td></tr>'}</table></section><p class="mu"><a href="/admin/export.csv">CSVで書き出し（専用URL付き）</a></p>`))});
 const TF=[['start_date','開始日','date'],['maturity_date','満期日','date'],['principal','お預かり元本（円）','number'],['add_principal','追加元本（円）','number'],['patron','PATRON（円）','number'],['fee_rate','手数料率（％）','number'],['target_lo','目標倍率 下限','number'],['target_hi','目標倍率 上限','number']];
 const cActs=c=>{try{const a=JSON.parse(c.acts_json||'');if(a&&a.length)return a}catch{}return acts()};
 app.get('/admin/c/:id',(q,s)=>{const c=one('SELECT * FROM clients WHERE id=?',[q.params.id]);if(!c)return s.sendStatus(404);if(!c.member_id){c.member_id=genMid();run('UPDATE clients SET member_id=? WHERE id=?',[c.member_id,c.id])}const k=clientCalc(c);const dep=all('SELECT * FROM deposits WHERE client_id=? ORDER BY date DESC',[c.id]);const t=terms(c,k);const ev=evFor(c);const bals=all('SELECT * FROM balances WHERE client_id=? ORDER BY date DESC,id DESC',[c.id]);const latestBal=bals[0]||null;const pPrev=prog(c,k);const ocrYenAmt=q.query.ocr!=null&&q.query.ocr!==''?Number(q.query.ocr):null;const ocrFile=q.query.ocrfile||'';const ocrDate=q.query.ocrdate||jst();const balPrefill=ocrYenAmt!=null&&isFinite(ocrYenAmt)?Math.round(ocrYenAmt):(latestBal!=null?rowYenNum(latestBal):'');
@@ -661,6 +662,73 @@ app.post('/admin/c/:id/dep',(q,s)=>{run('INSERT INTO deposits(client_id,date,amo
 app.post('/admin/c/:id/deldep/:d',(q,s)=>{run('DELETE FROM deposits WHERE id=? AND client_id=?',[q.params.d,q.params.id]);R(s,q.params.id)});
 app.post('/admin/c/:id/delete',(q,s)=>{run('DELETE FROM clients WHERE id=?',[q.params.id]);run('DELETE FROM deposits WHERE client_id=?',[q.params.id]);run('DELETE FROM balances WHERE client_id=?',[q.params.id]);s.redirect('/admin?m=削除しました')});
 // マスター口座
+
+// ===== 報告済みスナップショット（append-only） =====
+app.post('/admin/c/:id/reported',async(q,s)=>{
+  try{rotateBackup('pre-report-snap')}catch(e){}
+  const c=one('SELECT * FROM clients WHERE id=?',[q.params.id]);
+  if(!c)return s.sendStatus(404);
+  try{
+    const renderHtml=(client)=>{
+      const th=themeOf(client,{});
+      return th==='c'?report2C(client):report2(client);
+    };
+    const meta=await reportSnap.createSnapshot({
+      DATA_DIR,renderHtml,client:c,baseUrl:BASE(),run,save
+    });
+    s.redirect('/admin/c/'+c.id+'/reports?m='+encodeURIComponent('報告を保存しました（'+meta.created_jst+'）'));
+  }catch(e){
+    console.error('reported',e&&e.message||e);
+    s.redirect('/admin/c/'+q.params.id+'/reports?m='+encodeURIComponent('保存に失敗しました：'+(e&&e.message||e)));
+  }
+});
+app.get('/admin/c/:id/reports',(q,s)=>{
+  const c=one('SELECT * FROM clients WHERE id=?',[q.params.id]);
+  if(!c)return s.sendStatus(404);
+  const rows=reportSnap.listSnaps(all,c.id);
+  const du=reportSnap.diskUsage(DATA_DIR);
+  s.send(apage('報告履歴｜'+c.name,`<p style="margin:0 0 10px"><a href="/admin">← 一覧へ</a> · <a href="/admin/c/${c.id}">編集</a></p>
+<div class="ah"><h1>報告履歴：${esc(c.name)}</h1>
+<form method="post" action="/admin/c/${c.id}/reported"><button class="b">いまの運用進捗レポートを保存（報告済み）</button></form></div>
+${aflash(q)}
+<p class="mu">保存した報告は削除できません（追加のみ）。ファイルはサーバーの永続ディスクに保管し、二重バックアップします。</p>
+<p class="mu">ディスク使用量（DATA_DIR）：約 ${du.mb} MB（${du.files} ファイル）</p>
+<section class="k" style="padding:0;overflow:hidden"><table>
+<tr><th>保存日時</th><th>プレビュー</th><th>ダウンロード</th></tr>
+${rows.map(r=>{
+  const png=r.png?`/admin/reports/file/${r.id}/png`:'';
+  const pdf=r.pdf?`/admin/reports/file/${r.id}/pdf`:'';
+  const html=`/admin/reports/file/${r.id}/html`;
+  return `<tr>
+<td data-l="保存日時"><b>${esc(r.created)}</b><div class="mu">#${r.id}</div></td>
+<td data-l="プレビュー">${png?`<a href="${png}" target="_blank"><img src="${png}" alt="preview" style="max-width:180px;max-height:120px;border-radius:8px;border:1px solid #e5e7eb"></a>`:`<a href="${html}" target="_blank">HTMLを表示</a>`}</td>
+<td data-l="ダウンロード" style="display:flex;flex-direction:column;gap:6px">
+${png?`<a class="b s" href="${png}" download>画像（PNG）</a>`:''}
+${pdf?`<a class="b s" href="${pdf}" download>PDF</a>`:''}
+<a class="b s o" href="${html}" target="_blank">HTML</a>
+</td></tr>`;
+}).join('')||'<tr><td class="mu" colspan="3">まだ報告の保存がありません。「報告済み」を押すと、この時点の運用進捗レポートが保存されます。</td></tr>'}
+</table></section>`));
+});
+app.get('/admin/reports/file/:rid/:kind',(q,s)=>{
+  const r=one('SELECT * FROM report_snaps WHERE id=?',[q.params.rid]);
+  if(!r)return s.sendStatus(404);
+  const kind=q.params.kind;
+  const name=kind==='png'?r.png:kind==='pdf'?r.pdf:kind==='html'?r.html:null;
+  if(!name)return s.sendStatus(404);
+  const fp=require('path').join(DATA_DIR,'reports',r.rel,name);
+  if(!fs.existsSync(fp)){
+    const fp2=require('path').join(DATA_DIR,'report-backups',r.rel,name);
+    if(!fs.existsSync(fp2))return s.sendStatus(404);
+    return s.sendFile(require('path').resolve(fp2));
+  }
+  s.sendFile(require('path').resolve(fp));
+});
+app.get('/admin/disk-status',(q,s)=>{
+  const du=reportSnap.diskUsage(DATA_DIR);
+  s.type('json').send({ok:true,at:new Date().toISOString(),diskGB_plan:1,usage:du,warn:du.gb>0.8});
+});
+
 app.get('/admin/master',(q,s)=>{const ms=masterSeries().reverse();const ev=all('SELECT * FROM evidence ORDER BY id DESC');const hasKey=!!getS('api_key');
  s.send(apage('共有口座',`<div class="ah"><h1>共有口座</h1>${anav('/admin/master')}</div>${aflash(q)}<style>.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-bottom:16px}.card h2{font-size:15px;margin:0 0 12px}.form button,.card button{border:1px solid #2563eb;background:#2563eb;color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-family:inherit}.btn.ghost{background:#fff!important;color:#2563eb!important}.muted{color:#6b7280;font-size:12px}.g{color:#16a34a}.r{color:#dc2626}.thumb,.ev img{max-width:100%;max-height:160px;border-radius:8px}.ev{display:grid;grid-template-columns:1fr 1fr;gap:10px}.ev span{display:block;font-size:11px;color:#6b7280}.usd{display:none!important}.pgt{margin-top:12px;flex-basis:100%;width:100%}.hd{flex-wrap:wrap}.dsr .pgt{padding:0 14px;box-sizing:border-box}.pgt .pr{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}.pgt .pr b{font-size:20px}.pgt .bar{height:14px;border-radius:7px;background:rgba(127,127,127,.25);overflow:hidden;margin:6px 0}.pgt .bar i{display:block;height:100%;background:#22c55e;border-radius:7px}@media(max-width:700px){html,body{overflow-x:hidden}main{width:auto!important;max-width:100%!important;padding:12px!important;box-sizing:border-box}.c3,.c2,.ds,.t2,.ac,.g2,.g3{display:grid!important;grid-template-columns:1fr!important}.ds{display:flex!important;flex-wrap:wrap}.ds div{flex:1 1 30%!important;border:0!important;padding:6px 0}.top{display:block!important}.dsr,.hd{display:block!important}.dsr>*{width:auto!important;max-width:100%!important}dl{font-size:14px!important}.pr,.chip,.nt,.lg,.t2 span,.gl,.ds span{font-size:12px!important}.ds small{font-size:9px!important}.bn{flex-direction:column!important;display:flex!important;gap:10px}section,.cd{min-width:0!important;max-width:100%!important;box-sizing:border-box}h1{font-size:22px!important}body{font-size:15px}.bv{font-size:28px!important}svg,img{max-width:100%;height:auto}dl{grid-template-columns:1fr auto!important}}</style><div class="grid3"><section class="card"><h2>① Bybitから自動取得</h2><p class="muted">毎日 0:05（日本時間）に残高・入出金・決済済み取引を取得して保存します（Bybitの取引履歴は7日分しか残らないため毎日保存）。</p><form method="post" action="/admin/master/fetch"><button ${hasKey?'':'disabled'}>今すぐ取得</button></form>${hasKey?'<p class="muted">APIキー：設定済み</p>':'<p class="r"><a href="/admin/settings">共有口座設定</a>でAPIキーを登録してください。</p>'}</section>
 <section class="card"><h2>起点のリセット</h2><p class="muted">今日より前の共有口座の残高履歴と取引履歴、【例】のお客様と例の画像を消します。各お客様の持分は今日の運用資金から始まり、損益は0からになります。元に戻せません。</p><form method="post" action="/admin/master/rebase" onsubmit="return confirm('今日より前の履歴と例データを消します。よろしいですか？')"><button style="background:#dc2626;border-color:#dc2626">今日を起点にする（過去の例データを消す）</button></form></section><section class="card"><h2>② 手入力</h2>${fxNote()}<form method="post" action="/admin/master/manual" class="form"><label>日付<input type="date" name="date" value="${jst()}"></label><label>口座残高（円）<input type="number" step="0.01" name="equity" required></label><label>当日の入出金（円）<input type="number" step="0.01" name="flow" value="0"></label><button>登録</button></form></section>
@@ -701,6 +769,7 @@ CREATE TABLE IF NOT EXISTS trades(id INTEGER PRIMARY KEY,oid TEXT UNIQUE,ts INT,
 for(const [c,t] of [['principal','REAL'],['add_principal','REAL'],['patron','REAL'],['temp_funds','REAL'],['maturity_date','TEXT'],['fee_rate','REAL'],['target_lo','REAL'],['target_hi','REAL'],['pos','TEXT'],['lev','REAL'],['acts_json','TEXT']])try{db.run(`ALTER TABLE clients ADD COLUMN ${c} ${t}`)}catch{}
 try{db.run('ALTER TABLE clients ADD COLUMN theme TEXT')}catch{}try{db.run('ALTER TABLE evidence ADD COLUMN client_id INT')}catch{}try{db.run('ALTER TABLE clients ADD COLUMN created TEXT')}catch{}try{db.run("UPDATE clients SET created='2026-11-05' WHERE created IS NULL OR created=''")}catch{}try{db.run('ALTER TABLE clients ADD COLUMN member_id TEXT')}catch{}try{db.run('ALTER TABLE clients ADD COLUMN member_pw_hash TEXT')}catch{}try{db.run('CREATE UNIQUE INDEX IF NOT EXISTS ux_member_id ON clients(member_id)')}catch{}try{db.run("ALTER TABLE evidence ADD COLUMN kind TEXT DEFAULT '資産'")}catch{}try{db.run('ALTER TABLE evidence ADD COLUMN public INT DEFAULT 1')}catch{}
 db.run('CREATE TABLE IF NOT EXISTS balances(id INTEGER PRIMARY KEY,client_id INT,date TEXT,amount REAL,evidence_file TEXT,created TEXT)');try{db.run('ALTER TABLE balances ADD COLUMN amount_yen REAL')}catch{}try{db.run('ALTER TABLE balances ADD COLUMN source TEXT')}catch{}
+db.run('CREATE TABLE IF NOT EXISTS report_snaps(id INTEGER PRIMARY KEY,client_id INT,created TEXT,rel TEXT,png TEXT,pdf TEXT,html TEXT,meta_json TEXT)');
 try{db.run('CREATE UNIQUE INDEX IF NOT EXISTS ux_bal_client_date ON balances(client_id,date)')}catch{}
 if(process.env.SEED_SAMPLE=='1'&&!one('SELECT id FROM clients')&&!one('SELECT date FROM master'))require('./seed')(db,crypto);save();
 try{if(fs.existsSync(DBF)){rotateBackup('startup');console.log('DB:',DBF,'size',fs.statSync(DBF).size,'clients',(all('SELECT COUNT(*) c FROM clients')[0]||{}).c)}}catch(e){console.error('startup backup',e&&e.message)}
@@ -846,5 +915,7 @@ try{
     setS('align_amount_to_yen_v1','1');
     console.log('align_amount_to_yen_v1',n);
   }
-}catch(e){console.error('align_amount_to_yen_v1',e&&e.message)}try{const ms2=masterSeries();const snap=all('SELECT * FROM clients ORDER BY id').map(c=>{const k=clientCalc(c,ms2);return c.name+'|'+Math.round((k.fullBalYen!=null?k.fullBalYen:k.bal*fx()))+'|'+(k.manual?'M':'A')}).join(';;');console.log('freeze_v1_verify',snap);fs.writeFileSync(DATA_DIR+'/freeze_snapshot_v1.json',JSON.stringify({at:new Date().toISOString(),rows:snap.split(';;').filter(Boolean).map(s=>{const[n,y,m]=s.split('|');return{name:n,yen:Number(y),manual:m==='M'}})}))}catch(e){console.error('freeze_v1_verify',e&&e.message)}setTimeout(()=>{verifyFetchDecoupleOnce().catch(e=>console.error('verify_fetch_decouple',e&&e.message))},8000);fetchFx();setInterval(fetchFx,6*36e5);cron.schedule('5 0 * * *',async()=>{try{if(getS('api_key'))console.log(await fetchMaster())}catch(e){console.error('fetch',e.message)}},{timezone:'Asia/Tokyo'});cron.schedule('*/5 * * * *',async()=>{try{if(getS('api_key'))await fetchLiveWallet(true)}catch(e){console.error('live5',e&&e.message)}},{timezone:'Asia/Tokyo'});setTimeout(()=>{fetchLiveWallet(true).catch(e=>console.error('live0',e&&e.message))},2500);cron.schedule('10 3 * * *',()=>{try{rotateBackup('daily')}catch(e){console.error('daily backup',e&&e.message)}},{timezone:'Asia/Tokyo'});{const st=db.prepare('SELECT id FROM clients WHERE member_id IS NULL');const ids=[];while(st.step())ids.push(st.get()[0]);st.free();for(const i of ids)db.run('UPDATE clients SET member_id=? WHERE id=?',[genMid(),i]);if(ids.length)save()}app.listen(PORT,()=>console.log('http://localhost:'+PORT,'DATA_DIR='+DATA_DIR))}
+}catch(e){console.error('align_amount_to_yen_v1',e&&e.message)}try{const ms2=masterSeries();const snap=all('SELECT * FROM clients ORDER BY id').map(c=>{const k=clientCalc(c,ms2);return c.name+'|'+Math.round((k.fullBalYen!=null?k.fullBalYen:k.bal*fx()))+'|'+(k.manual?'M':'A')}).join(';;');console.log('freeze_v1_verify',snap);fs.writeFileSync(DATA_DIR+'/freeze_snapshot_v1.json',JSON.stringify({at:new Date().toISOString(),rows:snap.split(';;').filter(Boolean).map(s=>{const[n,y,m]=s.split('|');return{name:n,yen:Number(y),manual:m==='M'}})}))}catch(e){console.error('freeze_v1_verify',e&&e.message)}setTimeout(()=>{verifyFetchDecoupleOnce().catch(e=>console.error('verify_fetch_decouple',e&&e.message))},8000);fetchFx();setInterval(fetchFx,6*36e5);cron.schedule('5 0 * * *',async()=>{try{if(getS('api_key'))console.log(await fetchMaster())}catch(e){console.error('fetch',e.message)}},{timezone:'Asia/Tokyo'});cron.schedule('*/5 * * * *',async()=>{try{if(getS('api_key'))await fetchLiveWallet(true)}catch(e){console.error('live5',e&&e.message)}},{timezone:'Asia/Tokyo'});setTimeout(()=>{fetchLiveWallet(true).catch(e=>console.error('live0',e&&e.message))},2500);cron.schedule('10 3 * * *',()=>{try{rotateBackup('daily')}catch(e){console.error('daily backup',e&&e.message)}},{timezone:'Asia/Tokyo'});
+cron.schedule('15 9 * * *',()=>{try{const du=reportSnap.diskUsage(DATA_DIR);console.log('disk_status_daily',JSON.stringify({mb:du.mb,gb:du.gb,files:du.files,warn:du.gb>0.8}));if(du.gb>0.8)console.error('DISK_WARN usage approaching 1GB plan',du.gb)}catch(e){console.error('disk_status',e&&e.message)}},{timezone:'Asia/Tokyo'});
+{const st=db.prepare('SELECT id FROM clients WHERE member_id IS NULL');const ids=[];while(st.step())ids.push(st.get()[0]);st.free();for(const i of ids)db.run('UPDATE clients SET member_id=? WHERE id=?',[genMid(),i]);if(ids.length)save()}app.listen(PORT,()=>console.log('http://localhost:'+PORT,'DATA_DIR='+DATA_DIR))}
 module.exports={clientCalc,masterSeries,all,db:()=>db}});
