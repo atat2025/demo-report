@@ -384,7 +384,7 @@ ${tabs(c,1)}
 <section class="bk"><div class="bkt"><span class="bkp">${esc(c.name)}の持分</span></div><div class="bki">
 <div class="bk1"><span>合計資産 <button class="bke" onclick="this.closest('.bk').classList.toggle('hid')" aria-label="表示切替"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eaecef" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span><span class="bkr ${(L?L.r:0)>=0?'':'neg'}"><i>本日</i>${pct(L?L.r:0)}</span></div>
 <div class="bkv"><b class="m">${balYen(k)}</b></div>${balNote(null,k)}
-<div class="bkg"><div><span>ウォレット残高</span><b class="m">${balYen(k)}</b></div><div><span>本日の損益</span><b class="m ${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return d>=0?'up':'dn'})()}">${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return yens(d)})()}</b></div>
+<div class="bkg"><div><span>ウォレット残高</span><b class="m">${balYen(k)}</b></div>
 <div><span>累計損益</span><b class="m ${k.pnl>=0?'up':'dn'}">${yens(k.pnl)} <small>(${pct(k.rate)})</small></b></div><div><span>軍資金</span><b class="m">${jy(k.inv,0)}</b></div></div>
 </div></section>
 <section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div>${soonBox('日次損益')}</section>
@@ -427,7 +427,7 @@ ${tabs(c,1)}
 <section class="bk patron-share" style="background:#061a14!important;border:1px solid #0f3d30!important;box-shadow:none;border-radius:16px;padding:12px;margin:12px 0"><div class="bkt"><span class="bkp">うち${esc(c.name)}の持分</span></div><div class="bki" style="background:#0a241c!important;border-color:#0f3d30!important">
 <div class="bk1" style="font-size:13px;color:#a9c4b9"><span>合計資産</span></div>
 <div class="bkv"><b class="m">${balYen(k)}</b></div>${balNote(null,k)}
-<div class="bkg"><div><span>ウォレット残高</span><b class="m">${balYen(k)}</b></div><div><span>本日の損益</span><b class="m ${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return d>=0?'up':'dn'})()}">${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return yens(d)})()}</b></div>
+<div class="bkg"><div><span>ウォレット残高</span><b class="m">${balYen(k)}</b></div>
 <div><span>累計損益</span><b class="m ${k.pnl>=0?'up':'dn'}">${yens(k.pnl)} <small>(${pct(k.rate)})</small></b></div><div><span>軍資金</span><b class="m">${jy(k.inv,0)}</b></div></div>
 </div></section>
 <div class="sg"><div><span>損益率</span>${soonMark}<small>準備中</small></div><div><span>最大ドローダウン</span>${soonMark}<small>準備中</small></div><div><span>勝率</span>${soonMark}<small>準備中</small></div><div><span>確定損益合計</span>${soonMark}<small>準備中</small></div></div>
