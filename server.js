@@ -1,6 +1,6 @@
 const express=require('express'),fs=require('fs'),path=require('path'),crypto=require('crypto'),multer=require('multer'),cron=require('node-cron'),initSql=require('sql.js');
 if(fs.existsSync('.env'))for(const l of fs.readFileSync('.env','utf8').split('\n')){const m=l.match(/^(\w+)=(.*)$/);if(m&&!process.env[m[1]])process.env[m[1]]=m[2]}
-const PORT=process.env.PORT||3410,ADMIN=process.env.ADMIN_PASSWORD,API='https://api-demo.bybit.com';
+const PORT=process.env.PORT||3410,ADMIN=String(process.env.ADMIN_PASSWORD||'').trim().replace(/^["']+|["']+$/g,''),API='https://api-demo.bybit.com';
 if(process.env.VERCEL)process.env.TZ='Asia/Tokyo';
 const IS_PROD=!!(process.env.RENDER||process.env.RENDER_EXTERNAL_URL||process.env.NODE_ENV==='production');
 let DATA_DIR=process.env.DATA_DIR||(process.env.VERCEL?'/tmp/data':'data');
