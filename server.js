@@ -808,19 +808,10 @@ function freezeHoldingsV1(){
 
 // 凍結後に追加されたクライアントが共有口座に連動しないよう、残高未登録なら起動時に現在値で凍結する（既存の円は触らない）。
 function freezeNewAutos(){
-  const ms=masterSeries();
-  const msPrev=ms.length>1?ms.slice(0,-1):ms;
-  const today=jst();
-  const fxv=fx();
-  const log=[];
-  for(const c of all('SELECT * FROM clients ORDER BY id')){
-    if(clientBalances(c.id).length)continue;
-    const k=clientCalc(c,msPrev.length?msPrev:ms);
-    const yenAmt=Math.round(k.bal*fxv);
-    db.run('INSERT INTO balances(client_id,date,amount,amount_yen,evidence_file,created,source) VALUES(?,?,?,?,?,?,?)',[c.id,k.asof||today,k.bal,yenAmt,null,today,'freeze']);
-    log.push(c.name+':freeze_new_auto_yen='+yenAmt);
-  }
-  if(log.length){save();console.log('freeze_new_autos',log.join(';;'))}else console.log('freeze_new_autos skip');
+  // 久積様ルール: 管理画面で残高未入力の新規クライアントに boot で amount_yen を作らない（一覧は空白のまま）。
+  // 既存の freeze 行は残す（削除しない）。持分は管理画面の残高フォーム入力でのみ確定。
+  const missing=all('SELECT * FROM clients ORDER BY id').filter(c=>!clientBalances(c.id).length).map(c=>c.name);
+  console.log('freeze_new_autos noop', missing.length?('unentered='+missing.join('|')):'all_have_rows_or_none');
 }
 
 

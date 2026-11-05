@@ -1,67 +1,87 @@
 {
-  "savedAt": "2026-11-06T01:21:10+09:00",
-  "source": "freeze_v1_verify",
+  "savedAt": "2026-11-05T16:47:27.944Z",
+  "source": "admin_entered_vs_blank_v1",
   "base": "https://live-report-sg.onrender.com",
   "rows": [
     {
       "name": "野村幸司様",
-      "yen": 395825
+      "yen": 395825,
+      "blank": false
     },
     {
       "name": "佐藤正様",
-      "yen": 2344704
+      "yen": 2344704,
+      "blank": false
     },
     {
       "name": "武田智紀様",
-      "yen": 1485350
+      "yen": 1485350,
+      "blank": false
     },
     {
       "name": "塚田正広様",
-      "yen": 2821652
+      "yen": 2821652,
+      "blank": false
     },
     {
       "name": "勝又幸男様",
-      "yen": 1987453
+      "yen": 1987453,
+      "blank": false
     },
     {
       "name": "西野一夫様",
-      "yen": 1652479
+      "yen": 1652479,
+      "blank": false
     },
     {
       "name": "北村哲也様",
-      "yen": 3062382
+      "yen": 2523625,
+      "blank": false
     },
     {
       "name": "浜田将偉様",
-      "yen": 1642534
+      "yen": 1642534,
+      "blank": false
     },
     {
       "name": "福田浩和様",
-      "yen": 621781
+      "yen": null,
+      "blank": true
     },
     {
       "name": "萩野谷僚様",
-      "yen": 585354
+      "yen": 585354,
+      "blank": false
     },
     {
       "name": "佐々木美和様",
-      "yen": 2532531
+      "yen": 2532531,
+      "blank": false
     },
     {
       "name": "鈴木紀章様",
-      "yen": 2796235
+      "yen": 2796235,
+      "blank": false
     },
     {
       "name": "今井清香様",
-      "yen": 1227617
+      "yen": null,
+      "blank": true
     },
     {
       "name": "槻本賓様",
-      "yen": 605376
+      "yen": null,
+      "blank": true
     },
     {
       "name": "下竹佳代子様",
-      "yen": 1140124
+      "yen": null,
+      "blank": true
+    },
+    {
+      "name": "中野洋美様",
+      "yen": null,
+      "blank": true
     }
   ]
 }
