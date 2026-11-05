@@ -50,7 +50,7 @@ const num=(n,f=2)=>Number(n).toLocaleString('ja-JP',{minimumFractionDigits:f,max
 const sg=n=>(n>=0?'+':'');const fx=()=>Number(getS('usdt_jpy'))||Number(getS('usdt_jpy_live'))||150;const man=n=>yen(n);const yen=n=>(n<0?'−':'')+'¥'+Math.round(Math.abs(n)*fx()).toLocaleString('ja-JP');const yens=n=>(n>=0?'+':'')+yen(n);const jy=(n,f=2)=>`${yen(n)}`;const jys=(n,f=2)=>`${yens(n)}`;const pct=n=>sg(n)+(n*100).toFixed(2)+'%';
 const md=s=>{if(!s)return '—';const d=new Date(s);const y=d.getFullYear();return (y!=new Date().getFullYear()?y+'/':'')+(d.getMonth()+1)+'/'+d.getDate()};const dd=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
 const jst=(ms=Date.now())=>new Date(ms+9*36e5).toISOString().slice(0,10);
-const DEMO='';const SOON='COMING SOON';const soonBox=(t='')=>`<div class="soon" style="display:flex;align-items:center;justify-content:center;min-height:72px;padding:14px 12px;border-radius:12px;background:rgba(212,168,75,.06);border:1px dashed rgba(212,168,75,.35);color:rgba(212,168,75,.75);letter-spacing:.32em;font-size:10px;font-weight:300;writing-mode:horizontal-tb;text-orientation:mixed">${t?`<span style="letter-spacing:.08em;margin-right:12px;opacity:.55;font-weight:400">${t}</span>`:''}${SOON}</div>`;
+const DEMO='';const SOON='COMING SOON';const soonStyle='color:rgba(212,168,75,.78);letter-spacing:.28em;font-size:10px;font-weight:300';const soonMark=`<b style="${soonStyle};display:block;margin:8px 0 2px">${SOON}</b>`;const soonBox=(t='')=>`<div class="soon" style="display:flex;align-items:center;justify-content:center;min-height:72px;padding:14px 12px;border-radius:12px;background:rgba(212,168,75,.06);border:1px dashed rgba(212,168,75,.35);color:rgba(212,168,75,.75);letter-spacing:.32em;font-size:10px;font-weight:300;writing-mode:horizontal-tb;text-orientation:mixed">${t?`<span style="letter-spacing:.08em;margin-right:12px;opacity:.55;font-weight:400">${t}</span>`:''}${SOON}</div>`;
 // ===== 計算エンジン =====
 // マスター日次リターン r_d = (E_d − 入出金_d − E_{d−1}) / E_{d−1}
 function masterSeries(){const m=all('SELECT date,equity,flow FROM master ORDER BY date');const out=[];for(let i=0;i<m.length;i++){const p=m[i-1];{let r=p?(m[i].equity-m[i].flow-p.equity)/p.equity:0;if(!isFinite(r)||Math.abs(r)>0.5)r=0;out.push({...m[i],r})}}return out}
@@ -246,8 +246,8 @@ function report(c,mq){const k=clientCalc(c);const ms=masterSeries(),L=ms[ms.leng
 <header><div class="av">${esc([...c.name.replace(/^【[^】]*】/,'')][0]||'')}</div><div class="hn"><small>運用レポート</small><b>${esc(c.name.replace(/\s*様$/,''))} 様のポートフォリオ</b></div></header>
 ${tabs(c,1)}
 <section class="c">${ev?`<div class="shot"><img src="/e/${ev.file}" alt="Bybit 合計資産画面" style="width:60%;max-width:320px;margin:12px auto 0;display:block;border-radius:9px"></div><div class="cap">Bybit口座の合計資産画面（${ev.created} 撮影）</div>`:apiCard()}</section>
-<section class="c"><div class="l">${esc(c.name.replace(/\s*様$/,''))} 様の持分</div><div class="v big">${jy(k.bal)}</div>${balNote(null,k)}${spark2}<div class="g3"><div><span>軍資金</span><b>${yen(k.inv,0)}</b></div><div><span>累計損益</span><b class="${k.pnl>=0?'up':'dn'}">${yens(k.pnl)}</b></div><div><span>損益率</span><b style="color:#d4a84b">${SOON}</b></div></div></section>
-<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div></section>
+<section class="c"><div class="l">${esc(c.name.replace(/\s*様$/,''))} 様の持分</div><div class="v big">${jy(k.bal)}</div>${balNote(null,k)}${spark2}<div class="g3"><div><span>軍資金</span><b>${yen(k.inv,0)}</b></div><div><span>累計損益</span><b class="${k.pnl>=0?'up':'dn'}">${yens(k.pnl)}</b></div><div><span>損益率</span>${soonMark}</div></div></section>
+<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div>${soonBox('日次損益')}</section>
 <!-- monthly soon hidden -->
 <footer>最終更新：${updT}（日本時間）<br>※入出金は損益に含めません。持分は全体口座の日次損益率で計算しています。</footer></main>
 </body></html>`}
@@ -373,7 +373,7 @@ ${tabs(c,1)}
 <div class="bkg"><div><span>ウォレット残高</span><b class="m">${jy(k.bal)}</b></div><div><span>本日の損益</span><b class="m ${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return d>=0?'up':'dn'})()}">${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return yens(d)})()}</b></div>
 <div><span>累計損益</span><b class="m ${k.pnl>=0?'up':'dn'}">${yens(k.pnl)} <small>(${pct(k.rate)})</small></b></div><div><span>軍資金</span><b class="m">${jy(k.inv,0)}</b></div></div>
 </div></section>
-<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div></section>
+<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div>${soonBox('日次損益')}</section>
 <!-- monthly soon hidden -->
 <footer>最終更新：${updT}（日本時間）<br>※入出金は損益に含めません。持分は全体口座の日次損益率で計算しています。</footer></main>
 </body></html>`}
@@ -416,10 +416,10 @@ ${tabs(c,1)}
 <div class="bkg"><div><span>ウォレット残高</span><b class="m">${jy(k.bal)}</b></div><div><span>本日の損益</span><b class="m ${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return d>=0?'up':'dn'})()}">${(()=>{const d=k.ser.length>1?daily[k.ser[k.ser.length-1].date]:0;return yens(d)})()}</b></div>
 <div><span>累計損益</span><b class="m ${k.pnl>=0?'up':'dn'}">${yens(k.pnl)} <small>(${pct(k.rate)})</small></b></div><div><span>軍資金</span><b class="m">${jy(k.inv,0)}</b></div></div>
 </div></section>
-<div class="sg"><div><span>損益率</span><b style="color:#d4a84b">${SOON}</b><small>準備中</small></div><div><span>最大ドローダウン</span><b style="color:#d4a84b">${SOON}</b><small>準備中</small></div><div><span>勝率</span><b style="color:#d4a84b">${SOON}</b><small>準備中</small></div><div><span>確定損益合計</span><b style="color:#d4a84b">${SOON}</b><small>準備中</small></div></div>
+<div class="sg"><div><span>損益率</span>${soonMark}<small>準備中</small></div><div><span>最大ドローダウン</span>${soonMark}<small>準備中</small></div><div><span>勝率</span>${soonMark}<small>準備中</small></div><div><span>確定損益合計</span>${soonMark}<small>準備中</small></div></div>
 <div class="bhc"><div class="bht">残高推移 <small>BALANCE HISTORY</small></div>${soonBox('残高推移')}</div>
 ${evc?`<div class="rl" style="margin-top:14px">取引・チャート画面</div><img src="/e/${evc.file}" alt="取引・チャート画面">`:''}
-<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div></section>
+<section class="c" id="cal"><div class="ch"><b>日次損益カレンダー</b><div class="nav">${nav(mi-1,'‹')}<span>${Y}年${M}月</span>${nav(mi+1,'›')}</div></div><div class="wk">${'日月火水木金土'.split('').map(x=>`<span>${x}</span>`).join('')}</div><div class="cal">${cells}</div>${soonBox('日次損益')}</section>
 <!-- monthly soon hidden -->
 <footer>最終更新：${updT}（日本時間）<br>※入出金は損益に含めません。持分は全体口座の日次損益率で計算しています。</footer></main>
 </body></html>`}
